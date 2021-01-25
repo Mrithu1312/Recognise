@@ -1,101 +1,138 @@
-import os 
-import shutil
-from IPython.display import Image, display
-from sklearn.model_selection import train_test_split
-from tensorflow.python.keras.applications import ResNet50
-from tensorflow.python.keras.models import Sequential
-
-from tensorflow.python.keras.applications.resnet50 import preprocess_input
-from tensorflow.python.keras.preprocessing.image import ImageDataGenerator
-image_dir = 'biodegradable'
-
-# Read all flower images (.jpg) from a folder
-# The function returns both the path of the flower image and the corresponding label
-# which is defined by the name of the foler in which the image is
-def read_images_from_dir(biodegradable):
-    path_folder = os.path.join(image_dir, biodegradable)
-    files_directory = os.listdir(biodegradable)
-    
-    labels = []
-    images = []
-    for file in files_directory:
-        if file.endswith('.jpg'):
-            labels.append(biodegradable)
-            images.append(os.path.join(biodegradable))
-    return labels, images
-
-def read_images(base_dir):
-    labels = []
-    images = []
-    folders = os.listdir(image_dir)
-    for folder in folders:
-        labels_folder, images_folder = read_images_from_dir(base_dir, folder)
-        labels.extend(labels_folder)
-        images.extend(images_folder)
-    return labels, images
-
-labels, images = read_images(image_dir)
-from random import randrange
-
-for i in range(3):
-    random_index = randrange(len())
-    display(Image(images[random_index]))
-images_train, images_test, labels_train, labels_test = train_test_split(images, labels, test_size=0.3, random_state=8, stratify=labels)
-output_folder = '../input/output/'
-train_folder = '../input/output/train'
-test_folder = '../input/output/test'
-
-def create_output_folders():
-    if not os.path.exists(output_folder):
-        print('Creating output directories')
-        os.mkdir(output_folder)
-        if not os.path.exists(train_folder):
-            os.mkdir(train_folder)
-            for label in set(labels):
-                os.mkdir(train_folder + '/' + label)
-        if not os.path.exists(test_folder):
-            os.mkdir(test_folder)
-            for label in set(labels):
-                os.mkdir(test_folder + '/' + label)
-            
-def copy_files_to_train_and_validation_folders():            
-    print('Copy training files to directory')
-    for index, value in enumerate(images_train):
-        dest = os.path.join(train_folder, labels_train[index])
-        shutil.copy(value, dest)
-
-    print('Copy test files to directory')        
-    for index, value in enumerate(images_test):
-        shutil.copy(value, test_folder + '/' + labels_test[index])
-    
-create_output_folders()
-copy_files_to_train_and_validation_folders()
-num_classes = len(set(labels))
-resnet_weights_path = '../input/resnet50/resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5'
-
-# Create model
+# In[1]:
+import numpy as np
+import matplotlib.pyplot as plt
+import keras
+from keras.layers import *
+from keras.models import * 
+from keras.preprocessing import image
+# #  Model deployment
+# In[2]:
+get_ipython().system(' pip install tensorflow')
+get_ipython().system(' pip install keras')
+#Defining paths
+TRAIN_PATH = "CovidDataset/Train"
+VAL_PATH = "CovidDataset/Test"
+# In[3]:
+#Training model
 model = Sequential()
-model.add(ResNet50(include_top=False, pooling='avg', weights=resnet_weights_path))
-model.add(Dense(num_classes, activation='softmax'))
+model.add(Conv2D(32,kernel_size=(3,3),activation='relu',input_shape=(224,224,3)))
+model.add(Conv2D(128,(3,3),activation='relu'))
+model.add(MaxPooling2D(pool_size=(2,2)))
+model.add(Dropout(0.25))
+model.add(Conv2D(64,(3,3),activation='relu'))
+model.add(MaxPooling2D(pool_size=(2,2)))
+model.add(Dropout(0.25))
+model.add(Conv2D(128,(3,3),activation='relu'))
+model.add(MaxPooling2D(pool_size=(2,2)))
+model.add(Dropout(0.25))
+model.add(Flatten())
+model.add(Dense(64,activation='relu'))
+model.add(Dropout(0.5))
+model.add(Dense(1,activation='sigmoid'))
+model.compile(loss=keras.losses.binary_crossentropy,optimizer='adam',metrics=['accuracy'])
+# In[4]:
+#Getting parameters
+model.summary()
+# # Training data 
+# In[5]:
+#Moulding train images
+train_datagen = image.ImageDataGenerator(rescale = 1./255, shear_range = 0.2,zoom_range = 0.2, horizontal_flip = True)
+test_dataset = image.ImageDataGenerator(rescale=1./255)
+# In[6]:
+#Reshaping test and validation images 
+train_generator = train_datagen.flow_from_directory(
+    'CovidDataset/Train',
+    target_size = (224,224),
+    batch_size = 32,
+    class_mode = 'binary')
+validation_generator = test_dataset.flow_from_directory(
+    'CovidDataset/Val',
+    target_size = (224,224),
+    batch_size = 32,
+    class_mode = 'binary')
+# In[7]:
+224/32
+# In[8]:
+#Training the model
+hist_new = model.fit_generator(
+    train_generator,
+    steps_per_epoch=7,
+    epochs = 10,
+    validation_data = validation_generator,
+    validation_steps=2
+)
+# In[10]:
+#Getting summary
+summary=hist_new.history
+print(summary)
+# In[11]:
+model.save("model_covid.h5")
 
-# Do not train first layer (ResNet) as it is already pre-trained
-model.layers[0].trainable = False
 
-# Compile model 
-model.compile(optimizer='sgd', loss='categorical_crossentropy', metrics=['accuracy'])
-image_size = 224
-data_generator = ImageDataGenerator(preprocessing_function=preprocess_input)
-
-train_generator = data_generator.flow_from_directory(train_folder, target_size=(image_size, image_size), batch_size=24, class_mode='categorical')
-validation_generator = data_generator.flow_from_directory(test_folder, target_size=(image_size, image_size), class_mode='categorical')
-
-model.fit_generator(train_generator, steps_per_epoch=100, validation_data=validation_generator, validation_steps=1, epochs=5)
-image_size = 224
-data_generator_aug = ImageDataGenerator(preprocessing_function=preprocess_input, horizontal_flip=True, width_shift_range=0.2, height_shift_range=0.2)
-
-train_generator = data_generator_aug.flow_from_directory(train_folder, target_size=(image_size, image_size), batch_size=24, class_mode='categorical')
-validation_generator = data_generator_aug.flow_from_directory(test_folder, target_size=(image_size, image_size), class_mode='categorical')
-
-model.fit_generator(train_generator, steps_per_epoch=100, validation_data=validation_generator, validation_steps=1, epochs=5)
+# In[13]:
 
 
+model.evaluate_generator(train_generator)
+
+
+# In[14]:
+
+
+print(model.evaluate_generator(validation_generator))
+
+
+# ## Confusion Matrix
+
+# In[15]:
+
+
+import os
+train_generator.class_indices
+
+
+# In[16]:
+
+
+y_actual, y_test = [],[]
+
+
+# In[17]:
+
+
+for i in os.listdir("./CovidDataset/Val/Normal/"):
+    img=image.load_img("./CovidDataset/Val/Normal/"+i,target_size=(224,224))
+    img=image.img_to_array(img)
+    img=np.expand_dims(img,axis=0)
+    pred=model.predict_classes(img)
+    y_test.append(pred[0,0])
+    y_actual.append(1)
+    
+
+
+# In[18]:
+
+
+for i in os.listdir("./CovidDataset/Val/Covid/"):
+    img=image.load_img("./CovidDataset/Val/Covid/"+i,target_size=(224,224))
+    img=image.img_to_array(img)
+    img=np.expand_dims(img,axis=0)
+    pred=model.predict_classes(img)
+    y_test.append(pred[0,0])
+    y_actual.append(0)
+
+
+# In[19]:
+
+
+y_actual=np.array(y_actual)
+y_test=np.array(y_test)
+
+
+# In[20]:
+
+
+from sklearn.metrics import confusion_matrix
+import seaborn as sns
+cn=confusion_matrix(y_actual,y_test)
+# In[21]:
+sns.heatmap(cn,cmap="plasma",annot=True) #0: Covid ; 1: Normal
