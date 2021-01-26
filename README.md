@@ -5,13 +5,15 @@ import keras
 from keras.layers import *
 from keras.models import * 
 from keras.preprocessing import image
+
 # #  Model deployment
 # In[2]:
 get_ipython().system(' pip install tensorflow')
 get_ipython().system(' pip install keras')
 #Defining paths
-TRAIN_PATH = "CovidDataset/Train"
-VAL_PATH = "CovidDataset/Test"
+TRAIN_PATH = "biodegradable"
+VAL_PATH = "NON_BIODEGRADABLE"
+
 # In[3]:
 #Training model
 model = Sequential()
@@ -41,12 +43,12 @@ test_dataset = image.ImageDataGenerator(rescale=1./255)
 # In[6]:
 #Reshaping test and validation images 
 train_generator = train_datagen.flow_from_directory(
-    'CovidDataset/Train',
+    'NON_BIODEGRADABLE/Train',
     target_size = (224,224),
     batch_size = 32,
     class_mode = 'binary')
 validation_generator = test_dataset.flow_from_directory(
-    'CovidDataset/Val',
+    'NON_BIODEGRADABLE/Val',
     target_size = (224,224),
     batch_size = 32,
     class_mode = 'binary')
@@ -99,8 +101,8 @@ y_actual, y_test = [],[]
 # In[17]:
 
 
-for i in os.listdir("./CovidDataset/Val/Normal/"):
-    img=image.load_img("./CovidDataset/Val/Normal/"+i,target_size=(224,224))
+for i in os.listdir("./NON_BIODEGRADABLE/Val/Normal/"):
+    img=image.load_img("./NON_BIODEGRADABLE/Val/Normal/"+i,target_size=(224,224))
     img=image.img_to_array(img)
     img=np.expand_dims(img,axis=0)
     pred=model.predict_classes(img)
@@ -112,8 +114,8 @@ for i in os.listdir("./CovidDataset/Val/Normal/"):
 # In[18]:
 
 
-for i in os.listdir("./CovidDataset/Val/Covid/"):
-    img=image.load_img("./CovidDataset/Val/Covid/"+i,target_size=(224,224))
+for i in os.listdir("./NON_BIODEGRADABLE/Val/Covid/"):
+    img=image.load_img("./NON_BIODEGRADABLE/Val/Covid/"+i,target_size=(224,224))
     img=image.img_to_array(img)
     img=np.expand_dims(img,axis=0)
     pred=model.predict_classes(img)
